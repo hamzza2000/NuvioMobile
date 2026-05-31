@@ -3,27 +3,27 @@ name: Build iOS IPA
 on:
   workflow_dispatch:
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build-ios:
     runs-on: macos-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repository (no submodules)
         uses: actions/checkout@v4
         with:
           submodules: false
 
-      - name: Fix broken submodules
+      - name: Remove broken submodules and init valid ones
         run: |
-          git config --file .gitmodules --get-regexp path | while read key path; do
-            url_key=$(echo $key | sed 's/\.path$/.url/')
-            url=$(git config --file .gitmodules --get $url_key 2>/dev/null || echo "")
-            if [ -z "$url" ]; then
-              echo "Removing broken submodule: $path"
-              git config --file .gitmodules --remove-section "submodule.$path" 2>/dev/null || true
-            fi
-          done
-          git submodule sync 2>/dev/null || true
+          # Remove broken submodule entries that have no URL
+          git config --file .gitmodules --remove-section submodule.libass-android 2>/dev/null || true
+          git config --file .gitmodules --remove-section "submodule.iosApp/MPVKit" 2>/dev/null || true
+          git config --file .gitmodules --remove-section submodule.MPVKit 2>/dev/null || true
+          # Sync and init remaining valid submodules
+          git submodule sync
           git submodule update --init --recursive 2>/dev/null || true
 
       - name: Set up JDK 17
@@ -40,23 +40,16 @@ jobs:
         with:
           xcode-version: latest-stable
 
-      - name: List available Gradle tasks
-        run: ./gradlew :composeApp:tasks --group=build | grep -i ios || true
-
       - name: Build Kotlin/Native iOS framework
-        run: |
-          ./gradlew :composeApp:linkReleaseFrameworkIosArm64 || \
-          ./gradlew :composeApp:assembleXCFramework || \
-          ./gradlew :composeApp:linkReleaseFrameworkIosSimulatorArm64 || \
-          echo "Trying all known iOS framework tasks..."
-          ./gradlew :composeApp:tasks | grep -i "ios\|xcframework\|framework" || true
+        run: ./gradlew :composeApp:linkReleaseFrameworkIosArm64
 
       - name: Resolve Swift Package dependencies
         run: |
           cd iosApp
           xcodebuild -resolvePackageDependencies \
             -project iosApp.xcodeproj \
-            -scheme iosApp
+            -scheme iosApp \
+            -clonedSourcePackagesDirPath ../spm-packages
 
       - name: Build unsigned IPA
         run: |
@@ -67,6 +60,7 @@ jobs:
             -configuration Release \
             -sdk iphoneos \
             -archivePath build/iosApp.xcarchive \
+            -clonedSourcePackagesDirPath ../spm-packages \
             archive \
             CODE_SIGNING_ALLOWED=NO
           xcodebuild \
