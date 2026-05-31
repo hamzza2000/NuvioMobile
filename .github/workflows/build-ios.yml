@@ -1,4 +1,4 @@
-name: Build iOS IPA
+name: Build IOS IPA
 
 on:
   workflow_dispatch:  # manual trigger button
