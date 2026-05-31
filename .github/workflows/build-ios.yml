@@ -16,23 +16,23 @@ jobs:
         with:
           submodules: false
 
-      - name: Remove broken submodules
+      - name: Fix submodules and clone MPVKit manually
         run: |
-          # Remove all known broken submodules
+          # Remove broken submodule entries
           git config --file .gitmodules --remove-section submodule.libass-android 2>/dev/null || true
           git config --file .gitmodules --remove-section submodule.MPVKit 2>/dev/null || true
           git config --file .gitmodules --remove-section "submodule.iosApp/MPVKit" 2>/dev/null || true
-          # Remove their entries from .git/config too
           git config --remove-section submodule.libass-android 2>/dev/null || true
           git config --remove-section submodule.MPVKit 2>/dev/null || true
           git config --remove-section "submodule.iosApp/MPVKit" 2>/dev/null || true
-          # Init remaining valid submodules
-          git submodule sync
+          # Clone MPVKit directly into the expected location
+          git clone https://github.com/mpvkit/MPVKit.git MPVKit
+          # Init any remaining valid submodules
+          git submodule sync 2>/dev/null || true
           git submodule update --init --recursive 2>/dev/null || true
 
       - name: Create local.properties
-        run: |
-          echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
+        run: echo "sdk.dir=$ANDROID_SDK_ROOT" > local.properties
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
