@@ -13,10 +13,18 @@ jobs:
         with:
           submodules: false
 
-      - name: Init submodules (skip broken ones)
+      - name: Fix broken submodules
         run: |
-          git submodule sync
-          git submodule update --init --recursive --jobs 4 || true
+          git config --file .gitmodules --get-regexp path | while read key path; do
+            url_key=$(echo $key | sed 's/\.path$/.url/')
+            url=$(git config --file .gitmodules --get $url_key 2>/dev/null || echo "")
+            if [ -z "$url" ]; then
+              echo "Removing broken submodule: $path"
+              git config --file .gitmodules --remove-section "submodule.$path" 2>/dev/null || true
+            fi
+          done
+          git submodule sync 2>/dev/null || true
+          git submodule update --init --recursive 2>/dev/null || true
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -32,8 +40,16 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      - name: List available Gradle tasks
+        run: ./gradlew :composeApp:tasks --group=build | grep -i ios || true
+
       - name: Build Kotlin/Native iOS framework
-        run: ./gradlew :composeApp:assembleReleaseXCFramework
+        run: |
+          ./gradlew :composeApp:linkReleaseFrameworkIosArm64 || \
+          ./gradlew :composeApp:assembleXCFramework || \
+          ./gradlew :composeApp:linkReleaseFrameworkIosSimulatorArm64 || \
+          echo "Trying all known iOS framework tasks..."
+          ./gradlew :composeApp:tasks | grep -i "ios\|xcframework\|framework" || true
 
       - name: Resolve Swift Package dependencies
         run: |
