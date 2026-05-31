@@ -1,0 +1,61 @@
+name: Build iOS IPA
+
+on:
+  workflow_dispatch:  # manual trigger button
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'zulu'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Select Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Install CocoaPods
+        run: |
+          cd iosApp
+          pod install --repo-update
+
+      - name: Build Kotlin/Native iOS framework
+        run: ./gradlew :composeApp:assembleReleaseXCFramework
+
+      - name: Build unsigned IPA
+        run: |
+          cd iosApp
+          xcodebuild \
+            -workspace iosApp.xcworkspace \
+            -scheme iosApp \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath build/iosApp.xcarchive \
+            archive \
+            CODE_SIGNING_ALLOWED=NO
+
+          xcodebuild \
+            -exportArchive \
+            -archivePath build/iosApp.xcarchive \
+            -exportPath build/ipa \
+            -exportOptionsPlist exportOptions.plist
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NuvioMobile-iOS
+          path: iosApp/build/ipa/*.ipa
+          retention-days: 7
