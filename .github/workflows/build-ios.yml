@@ -1,13 +1,14 @@
-name: Build IOS IPA
+name: Build iOS IPA
 
 on:
-  workflow_dispatch:  # manual trigger button
+  workflow_dispatch:
 
 jobs:
   build-ios:
     runs-on: macos-latest
 
-    - name: Checkout repository
+    steps:
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           submodules: false
@@ -50,16 +51,17 @@ jobs:
             -archivePath build/iosApp.xcarchive \
             archive \
             CODE_SIGNING_ALLOWED=NO
-
           xcodebuild \
             -exportArchive \
             -archivePath build/iosApp.xcarchive \
             -exportPath build/ipa \
             -exportOptionsPlist exportOptions.plist
 
-      - name: Upload IPA artifact
-        uses: actions/upload-artifact@v4
+      - name: Create Release and upload IPA
+        uses: softprops/action-gh-release@v2
         with:
-          name: NuvioMobile-iOS
-          path: iosApp/build/ipa/*.ipa
-          retention-days: 7
+          tag_name: ios-build-${{ github.run_number }}
+          name: iOS Build ${{ github.run_number }}
+          files: iosApp/build/ipa/*.ipa
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
