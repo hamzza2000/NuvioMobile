@@ -18,16 +18,13 @@ jobs:
 
       - name: Fix submodules and clone MPVKit manually
         run: |
-          # Remove broken submodule entries
           git config --file .gitmodules --remove-section submodule.libass-android 2>/dev/null || true
           git config --file .gitmodules --remove-section submodule.MPVKit 2>/dev/null || true
           git config --file .gitmodules --remove-section "submodule.iosApp/MPVKit" 2>/dev/null || true
           git config --remove-section submodule.libass-android 2>/dev/null || true
           git config --remove-section submodule.MPVKit 2>/dev/null || true
           git config --remove-section "submodule.iosApp/MPVKit" 2>/dev/null || true
-          # Clone MPVKit directly into the expected location
           git clone https://github.com/mpvkit/MPVKit.git MPVKit
-          # Init any remaining valid submodules
           git submodule sync 2>/dev/null || true
           git submodule update --init --recursive 2>/dev/null || true
 
@@ -59,7 +56,7 @@ jobs:
             -scheme iosApp \
             -clonedSourcePackagesDirPath ../spm-packages
 
-      - name: Build unsigned IPA
+      - name: Build and archive
         run: |
           cd iosApp
           xcodebuild \
@@ -70,18 +67,25 @@ jobs:
             -archivePath build/iosApp.xcarchive \
             -clonedSourcePackagesDirPath ../spm-packages \
             archive \
-            CODE_SIGNING_ALLOWED=NO
-          xcodebuild \
-            -exportArchive \
-            -archivePath build/iosApp.xcarchive \
-            -exportPath build/ipa \
-            -exportOptionsPlist exportOptions.plist
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES
+
+      - name: Package IPA from archive
+        run: |
+          cd iosApp
+          mkdir -p build/ipa/Payload
+          cp -r build/iosApp.xcarchive/Products/Applications/Nuvio.app build/ipa/Payload/
+          cd build/ipa
+          zip -r Nuvio.ipa Payload
+          echo "IPA created successfully"
+          ls -lh Nuvio.ipa
 
       - name: Create Release and upload IPA
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ios-build-${{ github.run_number }}
           name: iOS Build ${{ github.run_number }}
-          files: iosApp/build/ipa/*.ipa
+          files: iosApp/build/ipa/Nuvio.ipa
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
